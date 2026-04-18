@@ -1,17 +1,21 @@
-    about: { type: String, default: "" },
+import mongoose from "mongoose";
+
+const serviceSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true },
     shortDescription: { type: String, default: "" },
-
+    about: { type: String, default: "" },
+    imageUrl: { type: String, default: "" },
     price: { type: Number, default: 0 },
-    available: { type: Boolean, default: true },
+    availability: {
+      type: String,
+      enum: ["Available", "Unavailable"],
+      default: "Available",
+    },
+  },
+  { timestamps: true },
+);
 
-    imageUrl: { type: String, default: null },
-    imagePublicId: { type: String, default: null },
+const Service = mongoose.model("Service", serviceSchema);
 
-    dates: { type: [String], default: [] },
-    slots: { type: Map, of: [String], default: {} },
-
-    instructions: { type: [String], default: [] },
-
-    totalAppointments: { type: Number, default: 0 },
-    completed: { type: Number, default: 0 },
-    canceled: { type: Number, default: 0 },
+export default Service;

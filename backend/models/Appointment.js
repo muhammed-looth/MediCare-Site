@@ -1,52 +1,32 @@
+import mongoose from "mongoose";
+
+const appointmentSchema = new mongoose.Schema(
+  {
+    patient: { type: mongoose.Schema.Types.ObjectId, ref: "Patient", required: true },
+    doctor: { type: mongoose.Schema.Types.ObjectId, ref: "Doctor", required: true },
+    department: { type: mongoose.Schema.Types.ObjectId, ref: "Department", required: true },
     patientName: { type: String, required: true, trim: true },
+    doctorName: { type: String, required: true, trim: true },
+    departmentName: { type: String, required: true, trim: true },
     mobile: { type: String, required: true, trim: true },
-    age: { type: Number, default: null },
-    gender: { type: String, default: "" },
-
-    doctorId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Doctor",
-      required: true,
-      index: true,
-    },
-    doctorName: { type: String, default: "" },
-    speciality: { type: String, default: "" },
-
-    doctorImage: {
-      url: { type: String, default: "" },
-      publicId: { type: String, default: "" },
-    },
-
     date: { type: String, required: true },
     time: { type: String, required: true },
-
-    fees: { type: Number, required: true, min: 0, default: 0 },
-
+    notes: { type: String, default: "" },
     status: {
       type: String,
       enum: ["Pending", "Confirmed", "Completed", "Canceled", "Rescheduled"],
       default: "Pending",
     },
-
-    rescheduledTo: {
-      date: { type: String },
-      time: { type: String },
+    fee: { type: Number, default: 0 },
+    createdByRole: {
+      type: String,
+      enum: ["admin", "doctor", "staff", "patient"],
+      default: "patient",
     },
+  },
+  { timestamps: true },
+);
 
-    payment: {
-      method: {
-        type: String,
-        enum: ["Cash", "Online"],
-        default: "Cash",
-      },
-      status: {
-        type: String,
-        enum: ["Pending", "Paid", "Failed", "Refunded"],
-        default: "Pending",
-      },
-      amount: { type: Number, default: 0 },
-      providerId: { type: String, default: "" },
-      meta: { type: mongoose.Schema.Types.Mixed, default: {} },
-    },
-    sessionId: { type: String, default: null, index: true },
-    paidAt: { type: Date, default: null }, 
+const Appointment = mongoose.model("Appointment", appointmentSchema);
+
+export default Appointment;

@@ -1,805 +1,221 @@
-import React, { useMemo, useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
-import {
-  ArrowLeft,
-  CalendarCheck,
-  MapPin,
-  BadgeInfo,
-  GraduationCap,
-  Award,
-  Clock,
-  Star,
-  Heart,
-  Zap,
-  Shield,
-  Users,
-  Phone,
-} from "lucide-react";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-
-// Clerk client hooks
-import { useAuth, useUser } from "@clerk/clerk-react";
-import { doctorDetailStyles } from "../assets/dummyStyles";
-
-const API_BASE = "http://localhost:4000";
-
-function getScheduleDates(schedule) {
-  if (!schedule) return [];
-
-  const keys =
-    typeof schedule === "object" && !Array.isArray(schedule)
-      ? Object.keys(schedule)
-      : [];
-
-  // Parse keys into Date objects (supporting YYYY-MM-DD and ISO)
-  const parsed = keys
-    .map((k) => {
-      const d = new Date(k);
-      if (!isNaN(d)) return { key: k, date: d };
-
-      // fallback: try splitting YYYY-MM-DD
-      const parts = k.split("-").map((n) => Number(n));
-      if (parts.length >= 3) {
-        const [y, m, day] = parts;
-        const dd = new Date(y, m - 1, day);
-        if (!isNaN(dd)) return { key: k, date: dd };
-      }
-      return null;
-    })
-    .filter(Boolean);
-
-  // Normalize compare by date-only (use UTC to avoid timezone time-of-day issues)
-  const dateOnlyValue = (d) =>
-    Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
-
-  const today = new Date();
-  const todayVal = dateOnlyValue(today);
-
-  const past = parsed
-    .filter((p) => dateOnlyValue(p.date) < todayVal)
-    .sort(
-      (a, b) =>
-        // most recent past first (descending)
-        dateOnlyValue(b.date) - dateOnlyValue(a.date),
-    );
-
-  const future = parsed
-    .filter((p) => dateOnlyValue(p.date) >= todayVal)
-    .sort(
-      (a, b) =>
-        // earliest first (ascending)
-        dateOnlyValue(a.date) - dateOnlyValue(b.date),
-    );
-
-  // Return array of Date objects in desired order
-  return [...past, ...future].map((p) => p.date);
-}
-
-/**
- * Normalize phone string: remove non-digits and return up to last 10 digits.
- * Returns empty string if no digits.
- */
-function normalizePhoneTo10(phone) {
-  if (!phone) return "";
-  const digits = ("" + phone).replace(/\D/g, "");
-  if (!digits) return "";
-  // prefer last 10 digits (common when country code present)
-  return digits.length <= 10 ? digits : digits.slice(-10);
-}
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { ArrowLeft, CalendarDays, MapPin, BadgeIndianRupee, Award, Star } from "lucide-react";
+import { getDoctorById } from "../../lib/api";
 
 export default function DoctorDetail() {
   const { id } = useParams();
-
   const [doctor, setDoctor] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedSlot, setSelectedSlot] = useState("");
-  const [isVisible, setIsVisible] = useState(false);
-
-  const [formData, setFormData] = useState({
-    name: "",
-    age: "",
-    mobile: "",
-    gender: "",
-    email: "",
-  });
-
-  const [paymentMethod, setPaymentMethod] = useState("Cash");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Clerk hooks
-  const { getToken, isLoaded: authLoaded } = useAuth();
-  const { isSignedIn, user, isLoaded: userLoaded } = useUser();
-
   useEffect(() => {
-    setIsVisible(true);
-  }, []);
-
-  // Prefill the form fields quietly if user is available (no UI markup change)
-  useEffect(() => {
-    if (!userLoaded) return;
-    if (user) {
-      const fullName =
-        user.fullName ||
-        `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
-        "";
-      const rawPhone =
-        user.primaryPhone ||
-        (user.phoneNumbers && user.phoneNumbers.length > 0
-          ? user.phoneNumbers[0]
-          : "") ||
-        "";
-      const phone = normalizePhoneTo10(rawPhone);
-      const email =
-        (user.emailAddresses && user.emailAddresses[0]?.emailAddress) ||
-        user.primaryEmailAddress ||
-        "";
-
-      setFormData((prev) => ({
-        ...prev,
-        name: prev.name || fullName,
-        mobile: prev.mobile || phone,
-        email: prev.email || email,
-      }));
-    }
-  }, [userLoaded, user]);
-
-  useEffect(() => {
-    let mounted = true;
     async function fetchDoctor() {
-      setLoading(true);
-      setError(null);
       try {
-        const res = await fetch(`${API_BASE}/api/doctors/${id}`);
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(
-            body.message || `Failed to fetch (status ${res.status})`,
-          );
+        setLoading(true);
+        setError(null);
+        console.log("Fetching doctor with ID:", id);
+        const item = await getDoctorById(id);
+        console.log("Fetched doctor data:", item);
+        if (!item) {
+          console.log("No doctor data returned");
+          setError("Doctor not found");
+          setDoctor(null);
+        } else {
+          console.log("Setting doctor state:", item.name);
+          setDoctor(item);
         }
-        const payload = await res.json();
-        const doc = payload?.data || null;
-        if (mounted) setDoctor(doc);
       } catch (err) {
-        if (mounted) setError(err.message || "Failed to fetch doctor");
+        console.error("Error fetching doctor:", err);
+        setError("Failed to load doctor details");
+        setDoctor(null);
       } finally {
-        if (mounted) setLoading(false);
+        setLoading(false);
       }
     }
     fetchDoctor();
-    return () => {
-      mounted = false;
-    };
   }, [id]);
 
-  const next7 = useMemo(() => getScheduleDates(doctor?.schedule), [doctor]);
-  const fee = Number(doctor?.fee ?? doctor?.fees ?? 0);
+  const scheduleEntries = useMemo(() => Object.entries(doctor?.schedule || {}), [doctor]);
 
-  const slots = useMemo(() => {
-    if (!selectedDate || !doctor?.schedule) return [];
-    const key = selectedDate.toISOString().split("T")[0];
-    return doctor.schedule && doctor.schedule[key] ? doctor.schedule[key] : [];
-  }, [selectedDate, doctor]);
-
-  // Mobile input handlers: only digits, max 10
-  const handleMobileChange = (value) => {
-    const digits = value.replace(/\D/g, "").slice(0, 10);
-    setFormData((prev) => ({ ...prev, mobile: digits }));
-  };
-
-  const handleMobilePaste = (e) => {
-    e.preventDefault();
-    const pasted = (e.clipboardData || window.clipboardData).getData("text");
-    const digits = pasted.replace(/\D/g, "").slice(0, 10);
-    setFormData((prev) => ({ ...prev, mobile: digits }));
-  };
-
-  const handleBooking = async () => {
-    if (isSubmitting) return;
-
-    // Validate patient details
-    if (
-      !formData.name ||
-      !formData.age ||
-      !formData.mobile ||
-      !formData.gender
-    ) {
-      toast.error("Please fill all patient details!", {
-        position: "top-center",
-        autoClose: 2000,
-      });
-      return;
-    }
-
-    // Mobile must be exactly 10 digits
-    const mobileDigits = (formData.mobile || "").replace(/\D/g, "");
-    if (mobileDigits.length !== 10) {
-      toast.error("Mobile number must be exactly 10 digits.", {
-        position: "top-center",
-        autoClose: 2500,
-      });
-      return;
-    }
-
-    if (!selectedDate || !selectedSlot) {
-      toast.error("Please select a date and time slot", {
-        position: "top-center",
-        autoClose: 2000,
-      });
-      return;
-    }
-
-    if (!authLoaded || !userLoaded) {
-      toast.error("Authentication not ready. Please try again in a moment.", {
-        position: "top-center",
-        autoClose: 2000,
-      });
-      return;
-    }
-
-    if (!isSignedIn) {
-      toast.error("You must sign in to create an appointment.", {
-        position: "top-center",
-        autoClose: 2200,
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    const dateISO = selectedDate.toISOString().split("T")[0]; // YYYY-MM-DD
-
-    // prefer fields from doctor object (this is only sent as a hint; backend will use DB)
-    const doctorNameValue = doctor?.name || "";
-    const specialityValue =
-      doctor?.specialization ||
-      doctor?.speciality ||
-      doctor?.specialityName ||
-      "";
-
-    // optional owner from doctor object (backend will prefer doctor.owner)
-    const ownerValue = doctor?.owner || undefined;
-
-    const payload = {
-      doctorId: doctor._id || doctor.id,
-      doctorName: doctorNameValue,
-      speciality: specialityValue,
-      owner: ownerValue,
-      // NEW: send image hints (optional — backend prefers DB but accepts these)
-      doctorImageUrl: doctor?.imageUrl || doctor?.image || "",
-      doctorImagePublicId:
-        doctor?.imagePublicId || doctor?.image?.publicId || "",
-      patientName: formData.name,
-      mobile: mobileDigits,
-      age: formData.age,
-      gender: formData.gender,
-      date: dateISO,
-      time: selectedSlot,
-      fee: fee,
-      fees: fee,
-      paymentMethod: paymentMethod || "Online",
-      email: formData.email || undefined,
-    };
-
-    try {
-      const token = await getToken();
-      if (!token) {
-        throw new Error("Failed to obtain authentication token.");
-      }
-
-      const res = await fetch(`${API_BASE}/api/appointments`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const body = await res.json().catch(() => null);
-      if (!res.ok) {
-        const message =
-          body?.message || body?.error || `Booking failed (${res.status})`;
-        toast.error(message, { position: "top-center" });
-        setIsSubmitting(false);
-        return;
-      }
-
-      // If checkoutUrl is returned -> redirect to Stripe Checkout
-      if (body.checkoutUrl) {
-        // redirect user to Stripe Checkout
-        window.location.href = body.checkoutUrl;
-        return;
-      }
-
-      // Booking created (Cash or free)
-      toast.success("Booking successful", {
-        position: "top-center",
-        autoClose: 1500,
-      });
-
-      // navigate to appointments list (you can change this path)
-      setTimeout(() => {
-        window.location.href = "/appointments?payment_status=Pending";
-      }, 700);
-    } catch (err) {
-      console.error("Booking error:", err);
-      toast.error(
-        err?.message || "Network error - booking failed (auth or server issue)",
-        { position: "top-center" },
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (loading)
+  if (loading) {
     return (
-      <div className={doctorDetailStyles.loadingContainer}>
-        <div>Loading doctor...</div>
-      </div>
-    );
-
-  if (error)
-    return (
-      <div className={doctorDetailStyles.errorContainer}>
-        <div className={doctorDetailStyles.errorContent}>
-          <div className={doctorDetailStyles.errorText}>Error</div>
-          <div className={doctorDetailStyles.errorMessage}>{error}</div>
-          <Link to="/doctors" className={doctorDetailStyles.backButton}>
-            <ArrowLeft size={20} />
-            Back to Doctors
-          </Link>
+      <div className="flex items-center justify-center min-h-[calc(100vh-120px)]">
+        <div className="bg-white rounded-lg shadow-lg p-12 text-center">
+          <div className="h-16 w-16 animate-spin rounded-full border-4 border-teal-200 border-t-teal-600 mx-auto mb-6"></div>
+          <p className="text-xl text-slate-600 font-semibold">Loading doctor details...</p>
         </div>
       </div>
     );
+  }
 
-  if (!doctor)
+  if (error || !doctor) {
+    console.log("Rendering error state. Error:", error, "Doctor:", doctor);
     return (
-      <div className={doctorDetailStyles.notFoundContainer}>
-        <div className={doctorDetailStyles.notFoundContent}>
-          <div className={doctorDetailStyles.notFoundEmoji}>😷</div>
-          <h1 className={doctorDetailStyles.notFoundTitle}>Doctor Not Found</h1>
-          <Link to="/doctors" className={doctorDetailStyles.backButton}>
-            <ArrowLeft size={20} />
-            Back to Doctors
+      <div className="py-16 sm:py-20">
+        <div className="section-shell">
+          <Link to="/doctors" className="inline-flex items-center gap-2 text-sm font-semibold text-teal-700 mb-8">
+            <ArrowLeft className="h-4 w-4" />
+            Back to doctors
           </Link>
+          <div className="w-full bg-white rounded-3xl shadow-lg p-10 border-2 border-red-200">
+            <div className="text-center">
+              <div className="text-red-100 flex justify-center mb-4">
+                <div className="bg-red-50 border-2 border-red-300 rounded-full p-4">
+                  <span className="text-4xl text-red-600">⚠</span>
+                </div>
+              </div>
+              <h2 className="text-2xl font-bold text-red-600 mb-2">Unable to Load Doctor</h2>
+              <p className="text-slate-600 mb-6 text-base">{error || "Doctor not found"}</p>
+              <Link
+                to="/doctors"
+                className="inline-block mt-4 px-6 py-3 bg-teal-600 text-white rounded-full hover:bg-teal-700 font-medium transition"
+              >
+                Return to Doctors
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     );
+  }
 
   return (
-    <div className={doctorDetailStyles.pageContainer}>
-      <ToastContainer />
-      {/* Header */}
-      <div className={doctorDetailStyles.headerContainer}>
-        <div className={doctorDetailStyles.headerContent}>
-          <div className={doctorDetailStyles.headerFlex}>
-            <Link to="/doctors" className={doctorDetailStyles.headerBackButton}>
-              <ArrowLeft size={18} />
-              <span className={doctorDetailStyles.headerBackButtonText}>
-                Back
-              </span>
-            </Link>
+    <section className="py-16 sm:py-20">
+      <div className="section-shell">
+        <Link to="/doctors" className="inline-flex items-center gap-2 text-sm font-semibold text-teal-700">
+          <ArrowLeft className="h-4 w-4" />
+          Back to doctors
+        </Link>
 
-            <div className="flex items-center gap-3">
-              <h1 className={doctorDetailStyles.headerTitle}>Doctor Profile</h1>
+        <div className="mt-6 grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+          <article className="glass-card overflow-hidden">
+            <div className="bg-linear-to-br from-teal-100 via-emerald-50 to-white p-8">
+              <img
+                src={doctor.imageUrl || "/placeholder-doctor.jpg"}
+                alt={doctor.name}
+                className="mx-auto h-80 w-full max-w-sm rounded-[32px] object-cover object-top"
+                onError={(e) => {
+                  e.target.src = "/placeholder-doctor.jpg";
+                }}
+              />
             </div>
-
-            <div className={doctorDetailStyles.headerRatingContainer}>
-              <Star className={doctorDetailStyles.headerRatingIcon} size={18} />
-              <span className={doctorDetailStyles.headerRatingText}>
-                {doctor.rating}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div
-        className={`${doctorDetailStyles.mainContent} ${
-          isVisible
-            ? doctorDetailStyles.visibleState
-            : doctorDetailStyles.hiddenState
-        }`}
-      >
-        {/* profile card */}
-        <div className={doctorDetailStyles.profileCard}>
-          <div className={doctorDetailStyles.profileGrid}>
-            <div className={doctorDetailStyles.leftColumn}>
-              <div className={doctorDetailStyles.avatarContainer}>
-                <div className={doctorDetailStyles.avatarGlow}></div>
-
-                <img
-                  src={
-                    doctor.imageUrl || doctor.image || "/placeholder-doctor.jpg"
-                  }
-                  alt={doctor.name}
-                  className={doctorDetailStyles.avatarImage}
-                  style={{ objectPosition: "center" }}
-                />
-              </div>
-
-              <div className={doctorDetailStyles.statsGrid}>
-                <div className={doctorDetailStyles.statBox}>
-                  <Heart
-                    className={`${doctorDetailStyles.statIcon} ${doctorDetailStyles.heartIcon}`}
-                  />
-                  <div className={doctorDetailStyles.statValue}>
-                    {doctor.success}%
-                  </div>
-                  <div className={doctorDetailStyles.statLabel}>Success</div>
-                </div>
-                <div className={doctorDetailStyles.statBox}>
-                  <Award
-                    className={`${doctorDetailStyles.statIcon} ${doctorDetailStyles.awardIcon}`}
-                  />
-                  <div className={doctorDetailStyles.statValue}>
-                    {doctor.experience} Years
-                  </div>
-                  <div className={doctorDetailStyles.statLabel}>Experience</div>
-                </div>
-                <div className={doctorDetailStyles.statBox}>
-                  <Users
-                    className={`${doctorDetailStyles.statIcon} ${doctorDetailStyles.usersIcon}`}
-                  />
-                  <div className={doctorDetailStyles.statValue}>
-                    {doctor.patients}
-                  </div>
-                  <div className={doctorDetailStyles.statLabel}>Patients</div>
-                </div>
-              </div>
-            </div>
-
-            {/* RIGHT */}
-            <div className={doctorDetailStyles.rightColumn}>
-              <div className="space-y-3">
-                <h1 className={doctorDetailStyles.doctorName}>{doctor.name}</h1>
-                <div className={doctorDetailStyles.specializationBadge}>
-                  <Zap className={doctorDetailStyles.badgeIcon} />
-                  {doctor.specialization ||
-                    doctor.speciality ||
-                    doctor.specialization}
-                </div>
-              </div>
-
-              <div className={doctorDetailStyles.infoGrid}>
-                <div className={doctorDetailStyles.infoItem}>
-                  <GraduationCap className={doctorDetailStyles.infoIcon} />
-                  <div>
-                    <div className={doctorDetailStyles.infoLabel}>
-                      Qualifications
-                    </div>
-                    <div className={doctorDetailStyles.infoValue}>
-                      {doctor.qualifications}
-                    </div>
-                  </div>
-                </div>
-
-                <div className={doctorDetailStyles.infoItem}>
-                  <MapPin className={doctorDetailStyles.infoIcon} />
-                  <div>
-                    <div className={doctorDetailStyles.infoLabel}>Location</div>
-                    <div className={doctorDetailStyles.infoValue}>
-                      {doctor.location}
-                    </div>
-                  </div>
-                </div>
-
-                <div className={doctorDetailStyles.infoItem}>
-                  <Clock className={doctorDetailStyles.infoIcon} />
-                  <div>
-                    <div className={doctorDetailStyles.infoLabel}>
-                      Consultation Fee
-                    </div>
-                    <div className={doctorDetailStyles.feeValue}>₹{fee}</div>
-                  </div>
-                </div>
-
-                <div className={doctorDetailStyles.infoItem}>
-                  <Shield className={doctorDetailStyles.infoIcon} />
-                  <div>
-                    <div className={doctorDetailStyles.infoLabel}>
-                      Availability
-                    </div>
-                    <div className={doctorDetailStyles.infoValue}>
-                      {doctor.availability === "Available" || doctor.available
-                        ? "Available"
-                        : "Available Soon"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className={doctorDetailStyles.aboutContainer}>
-                <div className={doctorDetailStyles.aboutHeader}>
-                  <BadgeInfo className={doctorDetailStyles.aboutIcon} />
-                  <h3 className={doctorDetailStyles.aboutTitle}>
-                    About Doctor
-                  </h3>
-                </div>
-                <p className={doctorDetailStyles.aboutText}>
-                  {doctor.about || doctor.bio}
+            <div className="space-y-5 p-8">
+              <div>
+                <p className="text-sm font-bold uppercase tracking-[0.3em] text-teal-700">
+                  {typeof doctor.department === "object" ? doctor.department?.name : doctor.department || "General"}
                 </p>
+                <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-900">{doctor.name || "Doctor"}</h1>
+                <p className="mt-2 text-lg text-slate-600">{doctor.specialization || "Specialist"}</p>
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* APPOINTMENT */}
-        <div className={doctorDetailStyles.appointmentContainer}>
-          <div className={doctorDetailStyles.appointmentContent}>
-            <div className={doctorDetailStyles.appointmentHeader}>
-              <CalendarCheck className={doctorDetailStyles.appointmentIcon} />
-              <h2 className={doctorDetailStyles.appointmentTitle}>
-                Book Your Appointment
-              </h2>
-            </div>
-
-            <div className={doctorDetailStyles.appointmentGrid}>
-              {/* LEFT COLUMN */}
-              <div className={doctorDetailStyles.dateSection}>
-                <h3 className={doctorDetailStyles.dateTitle}>
-                  <CalendarCheck className={doctorDetailStyles.dateTitleIcon} />{" "}
-                  Select Date
-                </h3>
-
-                <div className={doctorDetailStyles.dateScrollContainer}>
-                  <div className={doctorDetailStyles.dateButtonsContainer}>
-                    {next7.map((date) => {
-                      const isSelected =
-                        selectedDate?.toDateString() === date.toDateString();
-                      return (
-                        <button
-                          key={date.toISOString()}
-                          onClick={() => setSelectedDate(date)}
-                          className={`${doctorDetailStyles.dateButton} ${
-                            isSelected
-                              ? doctorDetailStyles.dateButtonSelected
-                              : doctorDetailStyles.dateButtonUnselected
-                          }`}
-                        >
-                          <div className={doctorDetailStyles.dateContent}>
-                            <div className={doctorDetailStyles.dateWeekday}>
-                              {date.toLocaleDateString("en-US", {
-                                weekday: "short",
-                              })}
-                            </div>
-                            <div className={doctorDetailStyles.dateDay}>
-                              {date.getDate()}
-                            </div>
-                            <div className={doctorDetailStyles.dateMonth}>
-                              {date.toLocaleDateString("en-US", {
-                                month: "short",
-                              })}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-3xl bg-slate-50 p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-500">
+                    <BadgeIndianRupee className="h-4 w-4 text-teal-700" />
+                    Consultation Fee
                   </div>
+                  <div className="mt-2 text-2xl font-bold text-slate-900">₹{doctor.fee || "—"}</div>
                 </div>
-
-                {/* PATIENT FORM */}
-                <div className={doctorDetailStyles.patientForm}>
-                  <h3 className={doctorDetailStyles.patientFormTitle}>
-                    Patient Details
-                  </h3>
-
-                  <div className={doctorDetailStyles.patientFormGrid}>
-                    <input
-                      type="text"
-                      placeholder="Full Name"
-                      className={doctorDetailStyles.formInput}
-                      value={formData.name}
-                      onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
-                      }
-                    />
-
-                    <input
-                      type="number"
-                      placeholder="Age"
-                      className={doctorDetailStyles.formInput}
-                      value={formData.age}
-                      onChange={(e) =>
-                        setFormData({ ...formData, age: e.target.value })
-                      }
-                    />
-
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      pattern="\d{10}"
-                      maxLength={10}
-                      placeholder="Mobile Number (10 digits)"
-                      className={doctorDetailStyles.formInput}
-                      value={formData.mobile}
-                      onChange={(e) => handleMobileChange(e.target.value)}
-                      onPaste={handleMobilePaste}
-                    />
-
-                    <select
-                      className={doctorDetailStyles.formSelect}
-                      value={formData.gender}
-                      onChange={(e) =>
-                        setFormData({ ...formData, gender: e.target.value })
-                      }
-                    >
-                      <option value="">Gender</option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                    </select>
-
-                    <input
-                      type="email"
-                      placeholder="Email (optional - for receipts)"
-                      className={doctorDetailStyles.emailInput}
-                      value={formData.email}
-                      onChange={(e) =>
-                        setFormData({ ...formData, email: e.target.value })
-                      }
-                    />
+                <div className="rounded-3xl bg-slate-50 p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-500">
+                    <Star className="h-4 w-4 text-amber-500" />
+                    Patient Rating
                   </div>
+                  <div className="mt-2 text-2xl font-bold text-slate-900">{doctor.rating || "—"} / 5</div>
                 </div>
               </div>
+              <div className="space-y-3 text-sm text-slate-600">
+                {doctor.qualifications && (
+                  <p className="flex items-center gap-2">
+                    <Award className="h-4 w-4 text-teal-700" />
+                    {doctor.qualifications}
+                  </p>
+                )}
+                {doctor.location && (
+                  <p className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-teal-700" />
+                    {doctor.location}
+                  </p>
+                )}
+                {doctor.experience && (
+                  <p className="flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4 text-teal-700" />
+                    {doctor.experience} of experience
+                  </p>
+                )}
+              </div>
+            </div>
+          </article>
 
-              {/* RIGHT COLUMN */}
-              <div className={doctorDetailStyles.timeSlotsSection}>
-                <h3 className={doctorDetailStyles.timeSlotsTitle}>
-                  <Clock className={doctorDetailStyles.timeSlotsIcon} />{" "}
-                  Available Time Slots
-                </h3>
+          <article className="glass-card p-8 sm:p-10">
+            <h2 className="text-3xl font-bold text-slate-900">About the doctor</h2>
+            <p className="mt-4 text-base leading-8 text-slate-600">
+              {doctor.about || "No additional information available."}
+            </p>
 
-                <div className={doctorDetailStyles.timeSlotsContainer}>
-                  {slots.length === 0 && (
-                    <p className={doctorDetailStyles.noSlotsMessage}>
-                      No time slots for this date.
-                    </p>
-                  )}
+            <div className="mt-8 grid gap-4 sm:grid-cols-3">
+              <div className="rounded-3xl border border-teal-100 bg-teal-50 p-5">
+                <div className="text-sm text-slate-500">Patients served</div>
+                <div className="mt-2 text-2xl font-black text-slate-900">{doctor.patients || "—"}</div>
+              </div>
+              <div className="rounded-3xl border border-teal-100 bg-teal-50 p-5">
+                <div className="text-sm text-slate-500">Success rate</div>
+                <div className="mt-2 text-2xl font-black text-slate-900">{doctor.success || "—"}</div>
+              </div>
+              <div className="rounded-3xl border border-teal-100 bg-teal-50 p-5">
+                <div className="text-sm text-slate-500">Current status</div>
+                <div className="mt-2 text-2xl font-black text-slate-900">{doctor.availability || "Available"}</div>
+              </div>
+            </div>
 
-                  {slots.map((slot) => (
-                    <button
-                      key={slot}
-                      onClick={() => setSelectedSlot(slot)}
-                      className={`${doctorDetailStyles.timeSlotButton} ${
-                        selectedSlot === slot
-                          ? doctorDetailStyles.timeSlotButtonSelected
-                          : doctorDetailStyles.timeSlotButtonUnselected
-                      }`}
-                    >
-                      <div className={doctorDetailStyles.timeSlotContent}>
-                        <Clock className={doctorDetailStyles.timeSlotIcon} />
-                        <span>{slot}</span>
+            <div className="mt-10">
+              <h3 className="text-2xl font-bold text-slate-900">Available slots</h3>
+              {scheduleEntries.length > 0 ? (
+                <div className="mt-5 space-y-4">
+                  {scheduleEntries.map(([date, slots]) => (
+                    <div key={date} className="rounded-[26px] border border-slate-200 bg-white p-5">
+                      <div className="text-sm font-bold uppercase tracking-[0.25em] text-teal-700">{date}</div>
+                      <div className="mt-3 flex flex-wrap gap-3">
+                        {Array.isArray(slots) && slots.length > 0 ? (
+                          slots.map((slot) => (
+                            <span
+                              key={`${date}-${slot}`}
+                              className="rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800"
+                            >
+                              {slot}
+                            </span>
+                          ))
+                        ) : (
+                          <p className="text-sm text-slate-500">No slots available</p>
+                        )}
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
-
-                {/* SUMMARY */}
-                <div className={doctorDetailStyles.summaryContainer}>
-                  <div className={doctorDetailStyles.summaryItem}>
-                    <div className={doctorDetailStyles.summaryRow}>
-                      <span className={doctorDetailStyles.summaryLabel}>
-                        Selected Doctor:
-                      </span>
-                      <span className={doctorDetailStyles.summaryValue}>
-                        {doctor?.name || "—"}
-                      </span>
-                    </div>
-
-                    <div className={doctorDetailStyles.summaryRow}>
-                      <span className={doctorDetailStyles.summaryLabel}>
-                        Doctor Speciality:
-                      </span>
-                      <span className={doctorDetailStyles.summaryValue}>
-                        {doctor?.specialization || doctor?.speciality || "—"}
-                      </span>
-                    </div>
-
-                    <div className={doctorDetailStyles.summaryRow}>
-                      <span className={doctorDetailStyles.summaryLabel}>
-                        Selected Date:
-                      </span>
-                      <span className={doctorDetailStyles.summaryValue}>
-                        {selectedDate
-                          ? selectedDate.toLocaleDateString("en-US", {
-                              weekday: "long",
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            })
-                          : "Not selected"}
-                      </span>
-                    </div>
-
-                    <div className={doctorDetailStyles.summaryRow}>
-                      <span className={doctorDetailStyles.summaryLabel}>
-                        Selected Time:
-                      </span>
-                      <span className={doctorDetailStyles.summaryValue}>
-                        {selectedSlot || "Not selected"}
-                      </span>
-                    </div>
-
-                    <div className={doctorDetailStyles.summaryRow}>
-                      <span className={doctorDetailStyles.summaryLabel}>
-                        Consultation Fee:
-                      </span>
-                      <span className={doctorDetailStyles.feeDisplay}>
-                        ₹{fee}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* PAYMENT METHOD SELECTOR */}
-                  <div className={doctorDetailStyles.paymentContainer}>
-                    <label className={doctorDetailStyles.paymentLabel}>
-                      Payment:
-                    </label>
-                    <div className={doctorDetailStyles.paymentOptions}>
-                      <label
-                        className={`${doctorDetailStyles.paymentOption} ${
-                          paymentMethod === "Cash"
-                            ? doctorDetailStyles.paymentOptionSelected
-                            : doctorDetailStyles.paymentOptionUnselected
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="payment"
-                          value="Cash"
-                          checked={paymentMethod === "Cash"}
-                          onChange={() => setPaymentMethod("Cash")}
-                          className={doctorDetailStyles.paymentRadio}
-                        />
-                        Cash
-                      </label>
-                      <label
-                        className={`${doctorDetailStyles.paymentOption} ${
-                          paymentMethod === "Online"
-                            ? doctorDetailStyles.paymentOptionSelected
-                            : doctorDetailStyles.paymentOptionUnselected
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="payment"
-                          value="Online"
-                          checked={paymentMethod === "Online"}
-                          onChange={() => setPaymentMethod("Online")}
-                          className={doctorDetailStyles.paymentRadio}
-                        />
-                        Online
-                      </label>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleBooking}
-                    disabled={!selectedDate || !selectedSlot || isSubmitting}
-                    className={`${doctorDetailStyles.bookingButton} ${
-                      !selectedDate || !selectedSlot || isSubmitting
-                        ? doctorDetailStyles.bookingButtonDisabled
-                        : doctorDetailStyles.bookingButtonEnabled
-                    }`}
-                  >
-                    <div className={doctorDetailStyles.bookingButtonContent}>
-                      <Phone className={doctorDetailStyles.bookingIcon} />
-                      <span>
-                        {isSubmitting ? "Booking..." : "Confirm Booking"}
-                      </span>
-                    </div>
-                  </button>
-                </div>
-              </div>
+              ) : (
+                <p className="mt-5 text-slate-500 text-center p-6 bg-slate-50 rounded-lg">
+                  No schedule available
+                </p>
+              )}
             </div>
-          </div>
+
+            <div className="mt-10 flex flex-wrap gap-4">
+              <Link
+                to="/appointments"
+                className="rounded-full bg-teal-700 px-6 py-3 text-sm font-bold text-white transition hover:bg-teal-800"
+              >
+                Proceed to booking
+              </Link>
+              <Link
+                to="/contact"
+                className="rounded-full border border-slate-300 px-6 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+              >
+                Contact support
+              </Link>
+            </div>
+          </article>
         </div>
-      </div>{" "}
-    </div>
+      </div>
+    </section>
   );
 }

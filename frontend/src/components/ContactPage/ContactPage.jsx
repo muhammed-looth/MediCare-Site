@@ -1,174 +1,55 @@
-  const initial = {
-    name: "",
-    email: "",
-    phone: "",
-    department: "",
-    service: "",
-    message: "",
-  };
+import { Mail, MapPin, PhoneCall } from "lucide-react";
 
-  const [form, setForm] = useState(initial);
-  const [errors, setErrors] = useState({});
-  const [sent, setSent] = useState(false);
+export default function ContactPage() {
+  return (
+    <section className="py-16 sm:py-20">
+      <div className="section-shell grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+        <article className="glass-card p-8 sm:p-10">
+          <p className="text-sm font-bold uppercase tracking-[0.35em] text-teal-700">Contact Us</p>
+          <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-900">
+            Let’s shape the final healthcare workflow together
+          </h1>
+          <p className="mt-4 text-base leading-8 text-slate-600">
+            As we keep building, you can give me anything still missing such as exact departments,
+            staff workflow rules, real hospital contact details, or deployment credentials.
+          </p>
 
-  const departments = [
-    "General Physician",
-    "Cardiology",
-    "Orthopedics",
-    "Dermatology",
-    "Pediatrics",
-    "Gynecology",
-  ];
-
-  const servicesMapping = {
-    "General Physician": [
-      "General Consultation",
-      "Adult Checkup",
-      "Vaccination",
-      "Health Screening",
-    ],
-    Cardiology: [
-      "ECG",
-      "Echocardiography",
-      "Stress Test",
-      "Heart Consultation",
-    ],
-    Orthopedics: ["Fracture Care", "Joint Pain Consultation", "Physiotherapy"],
-    Dermatology: ["Skin Consultation", "Allergy Test", "Acne Treatment"],
-    Pediatrics: ["Child Checkup", "Vaccination (Child)", "Growth Monitoring"],
-    Gynecology: ["Antenatal Care", "Pap Smear", "Ultrasound"],
-  };
-
-  const genericServices = [
-    "General Consultation",
-    "ECG",
-    "Blood Test",
-    "X-Ray",
-    "Ultrasound",
-    "Physiotherapy",
-    "Vaccination",
-  ];
-
-  function validate() {
-    const e = {};
-    if (!form.name.trim()) e.name = "Full name is required";
-    if (!form.email.trim()) e.email = "Email is required";
-    else if (!/^\S+@\S+\.\S+$/.test(form.email))
-      e.email = "Enter a valid email";
-    if (!form.phone.trim()) e.phone = "Phone number is required";
-    else if (!/^[0-9]{10}$/.test(form.phone))
-      e.phone = "Phone number must be exactly 10 digits";
-
-    if (!form.department && !form.service) {
-      e.department = "Please choose a department or service";
-      e.service = "Please choose a department or service";
-    }
-
-    if (!form.message.trim()) e.message = "Please write a short message";
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  }
-
-  function handleChange(e) {
-    const { name, value } = e.target;
-    if (name === "department") {
-      setForm((prev) => ({ ...prev, department: value, service: "" }));
-    } else {
-      setForm((prev) => ({ ...prev, [name]: value }));
-    }
-
-    setErrors((prev) => ({ ...prev, [name]: undefined }));
-
-    if (name === "department" || name === "service") {
-      setErrors((prev) => {
-        const copy = { ...prev };
-        if (
-          (name === "department" && value) ||
-          (name === "service" && value) ||
-          form.department ||
-          form.service
-        ) {
-          delete copy.department;
-          delete copy.service;
-        }
-        return copy;
-      });
-    }
-  }
-
-  function handleSubmit(e) {
-    e.preventDefault();
-    if (!validate()) return;
-
-    const text = `*Contact Request*\nName: ${form.name}\nEmail: ${
-      form.email
-    }\nPhone: ${form.phone}\nDepartment: ${
-      form.department || "N/A"
-    }\nService: ${form.service || "N/A"}\nMessage: ${form.message}`;
-
-    const url = `https://wa.me/8299431275?text=${encodeURIComponent(text)}`;
-    window.open(url, "_blank");
-
-    setForm(initial);
-    setErrors({});
-    setSent(true);
-    setTimeout(() => setSent(false), 4000);
-  }
-
-  const availableServices = form.department
-    ? servicesMapping[form.department] || []
-    : genericServices;
-
-            //Phone + Department
-            <div className={contactPageStyles.formGrid}>
-              <div>
-                <label className={contactPageStyles.label}>
-                  <Phone size={16} /> Phone
-                </label>
-                <input
-                  name="phone"
-                  type="tel"
-                  value={form.phone}
-                  onChange={handleChange}
-                  placeholder="1234567890"
-                  className={contactPageStyles.input}
-                  maxLength="10"
-                  aria-invalid={!!errors.phone}
-                />
-                {errors.phone && (
-                  <p className={contactPageStyles.error}>{errors.phone}</p>
-                )}
-              </div>
-
-              <div>
-                <label className={contactPageStyles.label}>
-                  <MapPin size={16} /> Department
-                </label>
-                <select
-                  name="department"
-                  value={form.department}
-                  onChange={handleChange}
-                  className={contactPageStyles.input}
-                >
-                  <option value="">Select Department</option>
-                  {departments.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-                {errors.department && (
-                  <p className={contactPageStyles.error}>
-                    {errors.department}
-                  </p>
-                )}
-              </div>
+          <div className="mt-8 space-y-4 text-sm text-slate-600">
+            <div className="flex gap-3 rounded-3xl bg-slate-50 p-4">
+              <MapPin className="mt-0.5 h-5 w-5 text-teal-700" />
+              <span>Chennai, Tamil Nadu, India</span>
             </div>
+            <div className="flex gap-3 rounded-3xl bg-slate-50 p-4">
+              <PhoneCall className="mt-0.5 h-5 w-5 text-teal-700" />
+              <span>+91 98765 43210</span>
+            </div>
+            <div className="flex gap-3 rounded-3xl bg-slate-50 p-4">
+              <Mail className="mt-0.5 h-5 w-5 text-teal-700" />
+              <span>support@medicarehealth.in</span>
+            </div>
+          </div>
+        </article>
 
-          <iframe
-            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3559.460792853461!2d80.98709187529213!3d26.870382662861033!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x399be2ae3cea2421%3A0x6c0de12e8a77818f!2sGomti%20Nagar%2C%20Lucknow%2C%20Uttar%20Pradesh!5e0!3m2!1sen!2sin!4v1731769000000!5m2!1sen!2sin"
-            className={contactPageStyles.map}
-            title="Gomti Nagar Map"
-            loading="lazy"
-            allowFullScreen
-          ></iframe>
+        <article className="glass-card p-8 sm:p-10">
+          <h2 className="text-2xl font-bold text-slate-900">Project input form</h2>
+          <p className="mt-3 text-sm leading-7 text-slate-600">
+            Send these details when ready and I’ll wire them into the real backend logic.
+          </p>
+          <div className="mt-6 grid gap-4">
+            {[
+              "MongoDB URI or local MongoDB confirmation",
+              "JWT secret for secure authentication",
+              "Final department list",
+              "Role permissions for admin, doctor, staff, and patient",
+              "Any real logo, hospital address, or contact numbers",
+            ].map((item) => (
+              <div key={item} className="rounded-3xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+                {item}
+              </div>
+            ))}
+          </div>
+        </article>
+      </div>
+    </section>
+  );
+}

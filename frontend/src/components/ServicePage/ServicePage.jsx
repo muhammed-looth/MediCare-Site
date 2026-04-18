@@ -1,165 +1,75 @@
-const PlaceholderImg = "/placeholder-service.jpg";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { ArrowRight, Sparkles } from "lucide-react";
+import { medicalToolsPattern } from "../../assets/dummyStyles";
+import { getServices } from "../../lib/api";
 
-const ServiceCard = ({ service }) => {
-  const hasSrcSet =
-    !!service.imageSrcSet ||
-    (!!service.imageSmall && !!service.imageMedium && !!service.imageLarge);
-
-  const src = service.imageUrl || service.image || service.imageSmall || "";
-  const srcSet =
-    service.imageSrcSet ||
-    (service.imageSmall || service.image
-      ? `${service.imageSmall || src} 480w, ${
-          service.imageMedium || src
-        } 768w, ${service.imageLarge || src} 1200w`
-      : null);
-
-  const name = service.name || "Service";
-  const shortDescription = service.shortDescription || service.about || "";
-
+export default function ServicesPage() {
+  const [services, setServices] = useState([]);
+  
+  useEffect(() => {
+    getServices().then((items) => setServices(Array.isArray(items) ? items : []));
+  }, []);
+  
   return (
-    <div className={serviceCardStyles.card}>
-      <div className={serviceCardStyles.imageContainer} aria-hidden="true">
-        {hasSrcSet ? (
-          <picture className={serviceCardStyles.picture}>
-            {service.imageWebp && (
-              <source srcSet={service.imageWebp} type="image/webp" />
-            )}
-            {service.imageSrcSet ? (
-              <img
-                src={src || PlaceholderImg}
-                srcSet={service.imageSrcSet}
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                alt={name}
-                loading="lazy"
-                decoding="async"
-                className={serviceCardStyles.responsiveImage}
-                onError={(e) => {
-                  e.currentTarget.onerror = null;
-                  e.currentTarget.src = PlaceholderImg;
-                }}
-              />
-            ) : (
-              <img
-                src={src || PlaceholderImg}
-                srcSet={srcSet || undefined}
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                alt={name}
-                loading="lazy"
-                decoding="async"
-                className={serviceCardStyles.responsiveImage}
-                onError={(e) => {
-                  e.currentTarget.onerror = null;
-                  e.currentTarget.src = PlaceholderImg;
-                }}
-              />
-            )}
-          </picture>
-        ) : (
-          <img
-            src={src || PlaceholderImg}
-            alt={name}
-            loading="lazy"
-            decoding="async"
-            className={serviceCardStyles.fallbackImage}
-            onError={(e) => {
-              e.currentTarget.onerror = null;
-              e.currentTarget.src = PlaceholderImg;
-            }}
-          />
-        )}
-      </div>
+    <div className="min-h-screen" style={{ backgroundImage: medicalToolsPattern, backgroundAttachment: "fixed"
+    }}>
+    <section className="py-12 sm:py-16">
+      <div className="section-shell">
+        <div className="max-w-3xl">
+          <p className="text-sm font-bold uppercase tracking-[0.35em] text-teal-700">Clinical Services</p>
+          <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-900">
+            Care packages shaped for outpatient and specialty workflows
+          </h1>
+          <p className="mt-4 text-base leading-7 text-slate-600">
+            These service cards are ready to connect with real backend records, pricing, slots,
+            and booking rules.
+          </p>
+        </div>
 
-      <div className={serviceCardStyles.content}>
-        <h3 className={serviceCardStyles.serviceName}>{name}</h3>
-
-        <div className={serviceCardStyles.buttonContainer}>
-          {service.available ? (
-            <Link
-              to={`/services/${service.id}`}
-              state={{ service: service.raw || service }}
-              className={serviceCardStyles.buttonAvailable}
-              aria-label={`Book ${name}`}
+        <div className="mt-10 grid gap-6 lg:grid-cols-2">
+          {services.map((service, index) => (
+            <article
+              key={service._id}
+              className={`overflow-hidden rounded-[30px] border ${
+                index % 2 === 0 ? "border-teal-100" : "border-amber-100"
+              } bg-white shadow-[0_20px_50px_rgba(15,23,42,0.06)]`}
             >
-              <ChevronsRight className="w-5 h-5" aria-hidden="true" />
-              Book Now
-            </Link>
-          ) : (
-            <button
-              disabled
-              className={serviceCardStyles.buttonUnavailable}
-              aria-label={`${name} not available`}
-            >
-              <MousePointer2Off className="w-5 h-5" aria-hidden="true" />
-              Not Available
-            </button>
-          )}
+              <div className="grid gap-0 md:grid-cols-[0.85fr_1.15fr]">
+                <div className="bg-linear-to-br from-teal-100 via-white to-emerald-50 p-6">
+                  <img
+                    src={service.imageUrl}
+                    alt={service.name}
+                    className="h-full min-h-64 w-full rounded-[24px] object-cover"
+                  />
+                </div>
+                <div className="p-8">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-amber-700">
+                    <Sparkles className="h-4 w-4" />
+                    {service.availability}
+                  </div>
+                  <h2 className="mt-4 text-2xl font-black text-slate-900">{service.name}</h2>
+                  <p className="mt-4 text-base leading-7 text-slate-600">{service.shortDescription}</p>
+                  <div className="mt-6 flex items-center justify-between">
+                    <div>
+                      <div className="text-sm text-slate-500">Starting price</div>
+                      <div className="text-3xl font-black text-slate-900">₹{service.price}</div>
+                    </div>
+                    <Link
+                      to={`/services/${service._id}`}
+                      className="inline-flex items-center gap-2 rounded-full bg-teal-700 px-5 py-3 text-sm font-bold text-white transition hover:bg-teal-800"
+                    >
+                      View service
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </article>
+          ))}
         </div>
       </div>
+    </section>
     </div>
   );
-};
-
-  const API_BASE = "http://localhost:4000";
-  const [services, setServices] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  async function loadServices() {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch(`${API_BASE}/api/services`);
-      const json = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        const msg =
-          (json && json.message) || `Failed to load services (${res.status})`;
-        setError(msg);
-        setServices([]);
-        setLoading(false);
-        return;
-      }
-
-      const items = (json && (json.data || json)) || [];
-      const normalized = (Array.isArray(items) ? items : []).map((s) => {
-        const id = s._id || s.id;
-        const image = s.imageUrl || s.image || s.imageSmall || "";
-        const available =
-          typeof s.available === "boolean"
-            ? s.available
-            : typeof s.availability === "string"
-              ? s.availability.toLowerCase() === "available"
-              : s.availability === "Available" || s.available === true;
-
-        return {
-          id,
-          name: s.name || "Service",
-          shortDescription: s.shortDescription || s.about || "",
-          image,
-          imageSmall: s.imageSmall || null,
-          imageMedium: s.imageMedium || null,
-          imageLarge: s.imageLarge || null,
-          imageSrcSet: s.imageSrcSet || null,
-          imageWebp: s.imageWebp || null,
-          price: s.price ?? s.fee ?? 0,
-          available,
-          raw: s,
-        };
-      });
-
-      setServices(normalized);
-    } catch (err) {
-      console.error("load services error:", err);
-      setError("Network error while loading services.");
-      setServices([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadServices();
-  }, [API_BASE]);
-
-  const shown = services.slice(0, previewCount);
+}

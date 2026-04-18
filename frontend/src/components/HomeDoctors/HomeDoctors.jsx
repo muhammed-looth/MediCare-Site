@@ -4,7 +4,14 @@
       setLoading(true);
       setError("");
       try {
-        const res = await fetch(`${API_BASE}/api/doctors`);
+        const res = await fetch(`${API_BASE}/api/doctors?t=${Date.now()}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
         const json = await res.json().catch(() => null);
 
         if (!res.ok) {
@@ -54,8 +61,13 @@
       }
     }
     load();
+    
+    // Refetch when window regains focus
+    window.addEventListener("focus", load);
+    
     return () => {
       mounted = false;
+      window.removeEventListener("focus", load);
     };
   }, [API_BASE]);
 
@@ -71,7 +83,14 @@
                 setError("");
       (async () => {
                   try {
-                    const res = await fetch(`${API_BASE}/api/doctors`);
+                    const res = await fetch(`${API_BASE}/api/doctors?t=${Date.now()}`, {
+                      cache: 'no-store',
+                      headers: {
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
+                      }
+                    });
                     const json = await res.json().catch(() => null);
                     const items = (json && (json.data || json)) || [];
                     const normalized = (Array.isArray(items) ? items : []).map(

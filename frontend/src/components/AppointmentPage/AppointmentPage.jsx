@@ -1,494 +1,361 @@
-function pad(n) {
-  return String(n ?? 0).padStart(2, "0");
-}
+import { useEffect, useMemo, useState } from "react";
+import { CalendarCheck2, Clock3, ShieldCheck, RotateCw } from "lucide-react";
+import { medicalToolsPattern } from "../../assets/dummyStyles";
+import { useAuth } from "../../contexts/AuthContext"; // Import useAuth
 
-function parseDateTime(dateStr, timeStr) {
-  const fast = new Date(`${dateStr} ${timeStr}`);
-  if (!isNaN(fast)) return fast;
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
-  const parts = (dateStr || "").split(" ");
-  if (parts.length === 3) {
-    const [d, m, y] = parts;
-    const months = {
-      Jan: 0,
-      Feb: 1,
-      Mar: 2,
-      Apr: 3,
-      May: 4,
-      Jun: 5,
-      Jul: 6,
-      Aug: 7,
-      Sep: 8,
-      Oct: 9,
-      Nov: 10,
-      Dec: 11,
-    };
-    const month = months[m];
-    let [t, ampm] = (timeStr || "").split(" ");
-    let [hh, mm] = (t || "0:00").split(":");
-    hh = Number(hh || 0);
-    mm = Number(mm || 0);
-
-    if (ampm === "PM" && hh !== 12) hh += 12;
-    if (ampm === "AM" && hh === 12) hh = 0;
-
-    return new Date(Number(y), month, Number(d), hh, mm);
-  }
-
-  const iso = new Date(dateStr);
-  if (!isNaN(iso)) return iso;
-  return new Date();
-}
-
-function computeStatus(item) {
-  const now = new Date();
-  if (!item) return "Pending";
-
-  if (item.status === "Canceled") return "Canceled";
-  if (item.status === "Rescheduled") {
-    if (
-      item.rescheduledTo &&
-      item.rescheduledTo.date &&
-      item.rescheduledTo.time
-    ) {
-      const dt = parseDateTime(
-        item.rescheduledTo.date,
-        item.rescheduledTo.time,
-      );
-      if (now >= dt) return "Completed";
-    }
-    return "Rescheduled";
-  }
-  if (item.status === "Completed") return "Completed";
-  if (item.status === "Confirmed") {
-    const dtConfirmed = parseDateTime(item.date, item.time);
-    if (now >= dtConfirmed) return "Completed";
-    return "Confirmed";
-  }
-  if (item.status === "Pending") {
-    const dtPending = parseDateTime(item.date, item.time);
-    if (now >= dtPending) return "Completed";
-    return "Pending";
-  }
-
-  const dt = parseDateTime(item.date, item.time);
-  if (now >= dt) return "Completed";
-  return item.confirmed ? "Confirmed" : "Pending";
-}
-
-const PaymentBadge = ({ payment }) => {
-  return payment === "Online" ? (
-    <span className={badgeStyles.paymentBadge.online}>
-      <CreditCard className={iconSize.small} /> Online
-    </span>
-  ) : (
-    <span className={badgeStyles.paymentBadge.cash}>
-      <Wallet className={iconSize.small} /> Cash
-    </span>
-  );
+const initialForm = {
+  patientName: "",
+  mobile: "",
+  department: "",
+  doctorId: "",
+  date: "",
+  time: "",
+  notes: "",
 };
 
-const StatusBadge = ({ itemStatus }) => {
-  if (itemStatus === "Completed")
-    return (
-      <span className={badgeStyles.statusBadge.completed}>
-        <CheckCircle className={iconSize.small} /> Completed
-      </span>
-    );
-
-  if (itemStatus === "Confirmed")
-    return (
-      <span className={badgeStyles.statusBadge.confirmed}>
-        <Bell className={iconSize.small} /> Confirmed
-      </span>
-    );
-
-  if (itemStatus === "Pending")
-    return (
-      <span className={badgeStyles.statusBadge.pending}>
-        <Clock className={iconSize.small} /> Pending
-      </span>
-    );
-
-  if (itemStatus === "Canceled")
-    return (
-      <span className={badgeStyles.statusBadge.canceled}>
-        <XCircle className={iconSize.small} /> Canceled
-      </span>
-    );
-
-  return (
-    <span className={badgeStyles.statusBadge.default}>
-      <CalendarDays className={iconSize.small} /> Rescheduled
-    </span>
-  );
-};
-
-  const { isLoaded, isSignedIn, getToken } = useAuth();
-  const { user } = useUser();
-
-  const [loadingDoctors, setLoadingDoctors] = useState(false);
-  const [loadingServices, setLoadingServices] = useState(false);
-
-  const [doctorAppts, setDoctorAppts] = useState([]);
-  const [serviceAppts, setServiceAppts] = useState([]);
-
-  const [appointmentsRaw, setAppointmentsRaw] = useState({
-    doctors: [],
-    services: [],
-  });
+export default function AppointmentsPage() {
+  const { user } = useAuth(); // Get user from AuthContext
+  const [doctors, setDoctors] = useState([]);
+  const [form, setForm] = useState(initialForm);
+  const [submitted, setSubmitted] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false); // New state for submit loading
 
-  const loadDoctorAppointments = useCallback(async () => {
-    if (!isLoaded) return;
-    setLoadingDoctors(true);
-    setError(null);
-
-    let token = null;
+  const fetchDoctors = async () => {
     try {
-      token = await getToken();
-      console.log(
-        "Clerk token (frontend):",
-        token ? `${token.slice(0, 20)}...` : null,
-      );
-    } catch (err) {
-      console.error("Failed to get Clerk token (frontend):", err);
-    }
-
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    console.log("Outgoing headers for /api/appointments/me:", headers);
-
-    try {
-      const resp = await API.get("/api/appointments/me", { headers });
-      console.log("Response from /api/appointments/me:", resp?.data);
-
-      const fetched =
-        resp?.data?.appointments ?? resp?.data?.data ?? resp?.data ?? [];
-      const arr = Array.isArray(fetched) ? fetched : [];
-
-      const doctors = arr.filter((a) => {
-        return (
-          (a.doctorId !== undefined && a.doctorId !== null) ||
-          !!a.doctorName ||
-          !a.serviceId
-        );
+      setLoading(true);
+      // Use direct fetch with cache-busting to ensure we get the absolute latest schedule data
+      const res = await fetch(`${API_BASE}/api/doctors?t=${Date.now()}`, {
+        headers: { 'Cache-Control': 'no-cache' }
       });
-
-      setDoctorAppts(doctors);
-      setAppointmentsRaw((p) => ({ ...p, doctors: doctors }));
+      const data = await res.json();
+      const list = data.data || data.doctors || data || [];
+      console.log("Doctors loaded:", list);
+      setDoctors(Array.isArray(list) ? list : []);
+      setError(null);
     } catch (err) {
-      console.error(
-        "Error calling /api/appointments/me:",
-        err?.response?.data || err.message || err,
+      console.error("Network Error:", err);
+      setError(
+        err.message === "Failed to fetch" 
+          ? `Network Error: Cannot reach ${API_BASE}/api/doctors. Check firewall and ensure your device is on the same WiFi.` 
+          : "Failed to load doctors"
       );
-
-      if (user?.id) {
-        try {
-          console.log("Attempting debug request with ?createdBy=", user.id);
-          const debugResp = await API.get(
-            `/api/appointments/me?createdBy=${user.id}`,
-            { headers },
-          );
-          console.log("Debug fallback response:", debugResp?.data);
-
-          const fetched =
-            debugResp?.data?.appointments ??
-            debugResp?.data?.data ??
-            debugResp?.data ??
-            [];
-          const arr = Array.isArray(fetched) ? fetched : [];
-          const doctors = arr.filter(
-            (a) =>
-              (a.doctorId !== undefined && a.doctorId !== null) ||
-              !!a.doctorName ||
-              !a.serviceId,
-          );
-          setDoctorAppts(doctors);
-          setAppointmentsRaw((p) => ({ ...p, doctors }));
-        } catch (err2) {
-          console.error(
-            "Debug fallback failed (doctors):",
-            err2?.response?.data || err2.message || err2,
-          );
-          setError((prev) =>
-            prev
-              ? prev + " | Doctors failed"
-              : "Failed to load doctor appointments. Check console.",
-          );
-          setDoctorAppts([]);
-        }
-      } else {
-        setError((prev) =>
-          prev
-            ? prev + " | No user id for doctors"
-            : "Failed to load doctor appointments and no user id available for debug fallback.",
-        );
-        setDoctorAppts([]);
-      }
+      setDoctors([]);
     } finally {
-      setLoadingDoctors(false);
+      setLoading(false);
     }
-  }, [isLoaded, getToken, user]);
-
-  const loadServiceAppointments = useCallback(async () => {
-    if (!isLoaded) return;
-    setLoadingServices(true);
-    setError(null);
-
-    let token = null;
-    try {
-      token = await getToken();
-    } catch (err) {
-      console.error("Failed to get Clerk token (frontend): err", err);
-    }
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    console.log("Outgoing headers for /api/service-appointments/me:", headers);
-
-    try {
-      const resp = await API.get("/api/service-appointments/me", { headers });
-      console.log("Response from /api/service-appointments/me:", resp?.data);
-
-      const fetched =
-        resp?.data?.appointments ?? resp?.data?.data ?? resp?.data ?? [];
-      const arr = Array.isArray(fetched) ? fetched : [];
-      console.log(arr);
-
-      setServiceAppts(arr);
-      setAppointmentsRaw((p) => ({ ...p, services: arr }));
-    } catch (err) {
-      console.error(
-        "Error calling /api/service-appointments/me:",
-        err?.response?.data || err.message || err,
-      );
-
-      if (user?.id) {
-        try {
-          console.log("Attempting debug request with ?createdBy=", user.id);
-          const debugResp = await API.get(
-            `/api/service-appointments/me?createdBy=${user.id}`,
-            { headers },
-          );
-          console.log("Debug fallback response (services):", debugResp?.data);
-
-          const fetched =
-            debugResp?.data?.appointments ??
-            debugResp?.data?.data ??
-            debugResp?.data ??
-            [];
-          const arr = Array.isArray(fetched) ? fetched : [];
-          setServiceAppts(arr);
-          setAppointmentsRaw((p) => ({ ...p, services: arr }));
-        } catch (err2) {
-          console.error(
-            "Debug fallback failed (services):",
-            err2?.response?.data || err2.message || err2,
-          );
-          setError((prev) =>
-            prev
-              ? prev + " | Services failed"
-              : "Failed to load service appointments. Check console.",
-          );
-          setServiceAppts([]);
-        }
-      } else {
-        setError((prev) =>
-          prev
-            ? prev + " | No user id for services"
-            : "Failed to load service appointments and no user id available for debug fallback.",
-        );
-        setServiceAppts([]);
-      }
-    } finally {
-      setLoadingServices(false);
-    }
-  }, [isLoaded, getToken, user]);
+  };
 
   useEffect(() => {
-    loadDoctorAppointments();
-    loadServiceAppointments();
-  }, [
-    isLoaded,
-    isSignedIn,
-    user,
-    loadDoctorAppointments,
-    loadServiceAppointments,
-  ]);
+    fetchDoctors();
 
-  function normalizeRescheduled(rt) {
-    if (!rt) return null;
-    if (rt.date && rt.time) return { date: rt.date, time: rt.time };
-    if (
-      rt.date &&
-      (rt.hour !== undefined || rt.minute !== undefined || rt.ampm)
-    ) {
-      const hour = rt.hour ?? 0;
-      const minute = rt.minute ?? 0;
-      const ampm = rt.ampm ?? "";
-      return { date: rt.date, time: `${hour}:${pad(minute)} ${ampm}` };
-    }
-    return {
-      date: rt.date || rt?.dateString || "",
-      time:
-        rt.time ||
-        (rt.hour
-          ? `${rt.hour}:${pad(rt.minute || 0)} ${rt.ampm || ""}`
-          : rt?.timeString || ""),
+    // Refetch doctors when window regains focus (user tabs back)
+    const handleFocus = () => {
+      console.log("Page regained focus, refreshing doctor data...");
+      fetchDoctors();
     };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
+
+  const selectedDoctor = useMemo(() => {
+    if (!doctors || doctors.length === 0 || !form.doctorId) return null;
+    return doctors.find((doc) => (doc._id === form.doctorId || doc.id === form.doctorId)) || null;
+  }, [doctors, form.doctorId]);
+
+  const slotOptions = useMemo(() => {
+    const schedule = selectedDoctor?.schedule || {};
+    const availableDates = Object.keys(schedule);
+    
+    if (availableDates.length === 0) return { date: "", slots: [], availableDates: [] };
+    
+    // Use the selected date if available, otherwise use the first available date
+    // This ensures we don't show an empty slot list if a previous doctor's date was selected
+    const dateToUse = (form.date && availableDates.includes(form.date)) ? form.date : availableDates[0];
+    const slotsForDate = schedule[dateToUse] || [];
+    
+    return {
+      date: dateToUse,
+      slots: Array.isArray(slotsForDate) ? slotsForDate : [],
+      availableDates: availableDates,
+    };
+  }, [form.date, selectedDoctor]);
+  
+  // Auto-set first available date when doctor is selected
+  useEffect(() => {
+    const schedule = selectedDoctor?.schedule || {};
+    const dates = Object.keys(schedule);
+
+    if (dates.length > 0) {
+      // Immediately set the date to the first available if current date is invalid
+      setForm(prev => ({ 
+        ...prev, 
+        date: (prev.date && dates.includes(prev.date)) ? prev.date : dates[0],
+        time: "" 
+      }));
+    } else {
+      setForm(prev => ({ ...prev, date: "", time: "" }));
+    }
+  }, [form.doctorId, selectedDoctor]); // Rerun when doctor selection OR doctor data changes
+
+  // Reset time if date changes
+  useEffect(() => {
+    setForm((current) => ({ ...current, time: "" }));
+  }, [form.date]);
+
+  function updateField(event) {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
   }
 
-  const appointmentData = useMemo(() => {
-    return doctorAppts
-      .map((a) => {
-        const id = a._id || a.id || String(a._id || "");
-        const doctorObj =
-          typeof a.doctorId === "object" && a.doctorId ? a.doctorId : {};
-        const image =
-          doctorObj.imageUrl ||
-          doctorObj.image ||
-          doctorObj.avatar ||
-          a.doctorImage?.url ||
-          a.doctorImage ||
-          "";
-        const doctorName =
-          (doctorObj.name && String(doctorObj.name).trim()) ||
-          (a.doctorName && String(a.doctorName).trim()) ||
-          (a.doctor && String(a.doctor).trim()) ||
-          (a.patientName && String(a.patientName).trim()) ||
-          "Doctor";
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setSubmitting(true); // Start submitting
+    setError(null);
 
-        const patientName = a.patientName || a.patient || "Patient";
-        const specialization =
-          doctorObj.specialization || a.specialization || a.speciality || "";
-        const experience = doctorObj.experience || a.experience || "";
-        const date = a.date || "";
-        let time = a.time || "";
+    const currentToken = localStorage.getItem("token"); // Get token from localStorage
+    if (!currentToken) {
+      setError("You must be logged in to book an appointment.");
+      setSubmitting(false);
+      return;
+    }
 
-        if (!time) {
-          if (a.hour !== undefined && a.minute !== undefined && a.ampm) {
-            time = `${a.hour}:${pad(a.minute)} ${a.ampm}`;
-          } else if (a.hour !== undefined && a.ampm) {
-            time = `${a.hour}:00 ${a.ampm}`;
-          }
-        }
+    // Map the ID of the logged-in user to 'patientId'.
+    // The backend now handles looking up the Patient profile via this User reference.
+    const payload = {
+      patientId: user?._id || user?.id,
+      doctorId: form.doctorId, 
+      date: form.date,
+      time: form.time,
+      patientName: form.patientName,
+      mobile: form.mobile,
+      department: form.department,
+      notes: form.notes,
+      doctorName: selectedDoctor?.name || "",
+      status: "Pending",
+    };
 
-        const payment = (a.payment && a.payment.method) || "Cash";
-        const status =
-          a.status ||
-          (a.payment && a.payment.status === "Paid" ? "Confirmed" : "Pending");
-        const rescheduledTo = normalizeRescheduled(
-          a.rescheduledTo || {
-            date: a.rescheduledDate,
-            time: a.rescheduledTime,
-          },
-        );
+    try {
+      const res = await fetch(`${API_BASE}/api/appointments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${currentToken}`, // Add Authorization header
+        },
+        body: JSON.stringify(payload),
+      });
 
-        return {
-          id,
-          image,
-          doctor: doctorName,
-          patientName,
-          specialization,
-          experience,
-          date,
-          time,
-          payment,
-          status,
-          rescheduledTo,
-        };
-      })
-      .map((x) => ({ ...x, status: computeStatus(x) }));
-  }, [doctorAppts]);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to book appointment");
 
-  const serviceData = useMemo(() => {
-    return serviceAppts
-      .map((s) => {
-        const id = s._id || s.id || String(s._id || "");
-        const svc =
-          typeof s.serviceId === "object" && s.serviceId ? s.serviceId : {};
-        const image =
-          svc.imageUrl ||
-          svc.image ||
-          svc.imageSmall ||
-          s.serviceImage?.url ||
-          s.serviceImage ||
-          "";
-        const name = s.serviceName || svc.name || svc.title || "Service";
-        const patientName = s.patientName || s.patient || "Patient";
-        const price = s.fees ?? s.amount ?? s.price ?? 0;
-        const date = s.date || "";
-        let time = s.time || "";
-        if (!time) {
-          if (s.hour !== undefined && s.minute !== undefined && s.ampm) {
-            time = `${s.hour}:${pad(s.minute)} ${s.ampm}`;
-          } else if (s.hour !== undefined && s.ampm) {
-            time = `${s.hour}:00 ${s.ampm}`;
-          }
-        }
+      setSubmitted(payload);
+      setForm(initialForm);
+      // Optionally, refetch doctors to update their schedules if a slot was consumed
+      // fetchDoctors();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false); // End submitting
+    }
+  }
 
-        const payment = (s.payment && s.payment.method) || "Cash";
-        const status =
-          s.status ||
-          (s.payment && s.payment.status === "Paid" ? "Confirmed" : "Pending");
-
-        const rescheduledTo = normalizeRescheduled(s.rescheduledTo || null);
-
-        return {
-          id,
-          image,
-          name,
-          patientName,
-          price,
-          date,
-          time,
-          payment,
-          status,
-          rescheduledTo,
-        };
-      })
-      .map((x) => ({ ...x, status: computeStatus(x) }));
-  }, [serviceAppts]);
-
-
-                    src={item.image || "/placeholder-doctor.png"}
-   
-
-  <div className={appointmentPageStyles.serviceGrid}>
-          {serviceData.map((srv) => (
-            <div key={srv.id} className={cardStyles.serviceCard}>
-              <div className={cardStyles.serviceImageContainer}>
-                <img
-                  src={srv.image || "/placeholder-service.png"}
-                  alt={srv.name}
-                  className={cardStyles.image}
-                  loading="lazy"
-                />
+  return (
+    <div className="min-h-screen" style={{ backgroundImage: medicalToolsPattern, backgroundAttachment: "fixed"
+    }}>
+    <section className="py-12 sm:py-16">
+      <div className="section-shell">
+        {loading ? (
+          <div className="glass-card p-8 sm:p-10">
+            <p className="text-center text-slate-500">Loading appointment form...</p>
+          </div>
+        ) : doctors.length === 0 ? (
+          <div className="glass-card p-8 sm:p-10">
+            <p className="text-center text-amber-600 font-semibold">No doctors available. Please start the backend server.</p>
+            {error && <p className="mt-4 text-center text-sm text-amber-700">{error}</p>}
+          </div>
+        ) : (
+          <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+            <article className="glass-card p-8 sm:p-10">
+              <div className="flex justify-between items-start mb-3">
+                <p className="text-sm font-bold uppercase tracking-[0.35em] text-teal-700">Appointment Desk</p>
+                <button
+                  type="button"
+                  onClick={fetchDoctors}
+                  disabled={loading}
+                  className="flex items-center gap-2 px-3 py-1 text-xs font-semibold text-teal-700 hover:text-teal-800 hover:bg-teal-50 rounded-lg transition disabled:opacity-50"
+                  title="Refresh doctor list and time slots"
+                >
+                  <RotateCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
               </div>
-
-              <h3 className={cardStyles.serviceName}>{srv.name}</h3>
-
-              <p className={cardStyles.price}>₹{srv.price}</p>
-
-              <p className={cardStyles.serviceDateContainer}>
-                <CalendarDays className={iconSize.medium} /> {srv.date}
+              <h1 className="text-4xl font-black tracking-tight text-slate-900">
+                Book a patient visit
+              </h1>
+              <p className="mt-4 text-base leading-7 text-slate-600">
+                Schedule an appointment with our healthcare professionals.
               </p>
 
-              <p className={cardStyles.serviceTimeContainer}>
-                <Clock className={iconSize.medium} /> {srv.time}
-              </p>
-
-              <div className={cardStyles.badgesContainer}>
-                <PaymentBadge payment={srv.payment} />
-                <StatusBadge itemStatus={srv.status} />
-              </div>
-
-              {srv.status === "Rescheduled" && srv.rescheduledTo ? (
-                <div className={cardStyles.serviceRescheduledText}>
-                  Rescheduled to{" "}
-                  <span className={cardStyles.rescheduledSpan}>
-                    {srv.rescheduledTo.date} : {srv.rescheduledTo.time}
-                  </span>
+              {error && ( // Display error message
+                <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+                  <p className="font-semibold">Error:</p>
+                  <p>{error}</p>
                 </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
+              )}
+
+              <form className="mt-8 grid gap-5" onSubmit={handleSubmit}>
+                <input
+                  name="patientName"
+                  value={form.patientName}
+                  onChange={updateField}
+                  placeholder="Patient full name"
+                  className="rounded-2xl border border-slate-200 bg-white px-5 py-4 outline-none focus:border-teal-500 focus:scale-[1.01] transition-all"
+                  required
+                />
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <input
+                    name="mobile"
+                    value={form.mobile}
+                    onChange={updateField}
+                    placeholder="Mobile number"
+                    className="rounded-2xl border border-slate-200 bg-white px-5 py-4 outline-none focus:border-teal-500 focus:scale-[1.01] transition-all"
+                    required
+                  />
+                  <input
+                    name="department"
+                    value={form.department}
+                    onChange={updateField}
+                    placeholder="Department"
+                    className="rounded-2xl border border-slate-200 bg-white px-5 py-4 outline-none focus:border-teal-500 focus:scale-[1.01] transition-all"
+                    required
+                  />
+                </div>
+                <select
+                  name="doctorId"
+                  value={form.doctorId}
+                  onChange={updateField}
+                  className="rounded-2xl border border-slate-200 bg-white px-5 py-4 outline-none focus:border-teal-500 focus:scale-[1.01] transition-all"
+                  required
+                >
+                  <option value="">Select doctor</option>
+                  {doctors.map((doctor) => (
+                    <option key={doctor._id} value={doctor._id}>
+                      {doctor.name} - {doctor.specialization}
+                    </option>
+                  ))}
+                </select>
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <input
+                    type="date"
+                    name="date"
+                    value={form.date}
+                    onChange={updateField}
+                    className="rounded-2xl border border-slate-200 bg-white px-5 py-4 outline-none focus:border-teal-500 focus:scale-[1.01] transition-all"
+                    required
+                  />
+                  <select
+                    name="time"
+                    value={form.time}
+                    onChange={updateField}
+                    className="rounded-2xl border border-slate-200 bg-white px-5 py-4 outline-none focus:border-teal-500 focus:scale-[1.01] transition-all"
+                    required
+                  >
+                    <option value="">Select time slot</option>
+                    {slotOptions.slots.map((slot) => (
+                      <option key={slot} value={slot}>
+                        {slot}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <textarea
+                  name="notes"
+                  value={form.notes}
+                  onChange={updateField}
+                  rows="5"
+                  placeholder="Symptoms or notes"
+                  className="rounded-3xl border border-slate-200 bg-white px-5 py-4 outline-none focus:border-teal-500 focus:scale-[1.01] transition-all"
+                />
+                <button
+                  type="submit"
+                  disabled={submitting} // Disable button while submitting
+                  className="rounded-full bg-teal-700 px-6 py-4 text-sm font-bold text-white transition-all hover:bg-teal-800 active:scale-95 shadow-lg hover:shadow-teal-700/20"
+                >
+                  {submitting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <RotateCw className="h-4 w-4 animate-spin" />
+                      Saving...
+                    </span>
+                  ) : (
+                    "Save booking request"
+                  )}
+                </button>
+              </form>
+            </article>
+
+            <article className="space-y-6">
+              <div className="glass-card p-8">
+                <div className="flex items-center gap-3">
+                  <CalendarCheck2 className="h-6 w-6 text-teal-700" />
+                  <h2 className="text-2xl font-bold text-slate-900">Workflow preview</h2>
+                </div>
+                <div className="mt-6 space-y-4 text-sm leading-7 text-slate-600">
+                  <p>Admin and staff can later confirm, reschedule, or cancel these records.</p>
+                  <p>Doctors will get their own dashboard for appointment visibility and schedule updates.</p>
+                  <p>Patients will be able to review booking history once auth is connected.</p>
+                </div>
+              </div>
+
+              <div className="glass-card p-8">
+                <div className="flex items-center gap-3">
+                  <Clock3 className="h-6 w-6 text-amber-600" />
+                  <h2 className="text-2xl font-bold text-slate-900">Full Availability</h2>
+                </div>
+                <div className="mt-5 space-y-3">
+                  {selectedDoctor?.schedule && Object.keys(selectedDoctor.schedule).length > 0 ? (
+                    Object.entries(selectedDoctor.schedule)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([date, slots]) => (
+                      <div key={date} className="rounded-2xl bg-slate-50 border border-slate-100 p-4 shadow-sm">
+                        <div className="font-bold text-teal-800 flex items-center gap-2">
+                          <CalendarCheck2 className="h-4 w-4" />
+                          {new Date(date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {Array.isArray(slots) && slots.map((slot) => (
+                            <span key={`${date}-${slot}`} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm border border-slate-100 hover:border-teal-400 hover:text-teal-700 transition-colors cursor-default">
+                              {slot}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-500">Choose a doctor to see available slots.</p>
+                  )}
+                </div>
+              </div>
+
+              {submitted && (
+                <div className="rounded-[30px] bg-slate-950 p-8 text-white shadow-2xl">
+                  <div className="flex items-center gap-3">
+                    <ShieldCheck className="h-6 w-6 text-amber-300" />
+                    <h2 className="text-2xl font-bold">Draft booking saved</h2>
+                  </div>
+                  <p className="mt-4 text-sm leading-7 text-slate-300">
+                    {submitted.patientName} requested an appointment with {submitted.doctorName} on {submitted.date} at {submitted.time}.
+                  </p>
+                </div>
+              )}
+            </article>
+          </div>
+        )}
+      </div>
+    </section>
+    </div>
+  );
+}

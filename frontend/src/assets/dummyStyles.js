@@ -1,5 +1,7 @@
 // assets/dummyStyles.js
 
+export const medicalToolsPattern = `url("data:image/svg+xml,%3Csvg width='10' height='10' viewBox='0 0 10 10' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 0V10M0 5H10' stroke='%23000000' stroke-opacity='0.04' stroke-width='1'/%3E%3C/svg%3E")`;
+
 export const appointmentPageStyles = {
   // Main container styles
   pageContainer: "min-h-screen font-serif bg-linear-to-br from-green-50 to-emerald-100 py-10 px-4",
@@ -760,7 +762,7 @@ export const navbarStyles = {
 
 export const servicePageStyles = {
   // Page container
-  pageContainer: "min-h-screen py-12 px-6 lg:px-20 font-serif bg-linear-to-b from-emerald-50 to-white",
+  pageContainer: "min-h-screen py-12 px-6 lg:px-20 font-serif bg-linear-to-b from-emerald-50 to-transparent", // Changed to-white to to-transparent. Apply medicalToolsPattern via style attribute in JSX.
   maxWidthContainer: "max-w-6xl mx-auto",
   
   // Header
@@ -815,7 +817,7 @@ export const serviceCardStyles = {
 // Testimonial styles
 export const testimonialStyles = {
   // Main container
-  container: "min-h-[70vh] bg-linear-to-br from-slate-50 to-blue-50 py-10 px-4 relative overflow-hidden",
+  container: "min-h-[70vh] bg-linear-to-br from-slate-50 to-blue-50 py-10 px-4 relative overflow-hidden", // This is not plain white, so no change needed.
   
   // Header
   headerContainer: "max-w-6xl font-serif mx-auto text-center mb-8 sm:mb-12",
@@ -883,7 +885,7 @@ export const testimonialStyles = {
 
 export const serviceDetailStyles = {
   // Page container
-  pageContainer: "min-h-screen font-serif bg-linear-to-br from-emerald-50 via-white to-green-50 px-4 lg:px-12 pt-20 sm:pt-12 md:pt-8 lg:pt-0",
+  pageContainer: "min-h-screen font-serif bg-linear-to-br from-emerald-50 via-transparent to-green-50 px-4 lg:px-12 pt-20 sm:pt-12 md:pt-8 lg:pt-0", // Changed via-white to via-transparent. Apply medicalToolsPattern via style attribute in JSX.
   
   // Navigation bar
   navBar: "backdrop-blur-lg top-0 z-20",
@@ -1430,7 +1432,7 @@ export const editProfilePageStyles = {
 // DashboardPage styles
 export const dashboardStyles = {
   // Main container
-  pageContainer: "min-h-screen font-serif pt-16 lg:pt-20 md:pt-15 p-4 sm:p-6 bg-linear-to-br from-emerald-50 to-white",
+  pageContainer: "min-h-screen font-serif pt-16 lg:pt-20 md:pt-15 p-4 sm:p-6 bg-linear-to-br from-emerald-50 to-transparent", // Changed to-white to to-transparent. Apply medicalToolsPattern via style attribute in JSX.
   
   // Content wrapper
   contentWrapper: "max-w-7xl mx-auto",
