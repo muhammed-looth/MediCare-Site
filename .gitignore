@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Environment variables (Contains DB passwords, JWT secrets, etc.)
+.env
+.env.local
+.env.*.local
+
+# Build output (Only serve the dist folder in production)
+dist/
+build/
+
+# Shell history (Prevents leaking command lines and credentials)
+.bash_history
+.sh_history
+.zsh_history
+
+# Sensitive data files (From your security report)
+userdata.json
+login.json
+PasswordsData.json
+users.json
+accounts.json
+master.json
+connections.json
+conndb.json
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Editor/IDE configurations
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db
