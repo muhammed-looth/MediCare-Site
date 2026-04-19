@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import morgan from "morgan";
 import authRoutes from "./routes/authRoutes.js";
 import doctorRoutes from "./routes/doctorRoutes.js";
@@ -13,12 +14,25 @@ import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
 
 const app = express();
 
+// Security: Set various security headers (CSP, XSS, Sniffing, etc.)
+app.use(helmet());
+
+// Security: Disable X-Powered-By header to prevent tech stack leakage
+app.disable("x-powered-by");
+
+// Security: Refine CORS to avoid wildcard-like origins when credentials are true
+const allowedOrigins = process.env.CLIENT_URL
+  ? process.env.CLIENT_URL.split(",").map((item) => item.trim())
+  : ["http://localhost:5173"]; // Fallback for local development
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL?.split(",").map((item) => item.trim()) || true,
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   }),
 );
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
